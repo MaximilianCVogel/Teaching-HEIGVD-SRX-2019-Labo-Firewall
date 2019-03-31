@@ -1,3 +1,5 @@
+### Crescence Yimnaing & Maximilian Vogel
+
 # Teaching-HEIGVD-SRX-2019-Laboratoire-Firewall
 
 **ATTENTION : Commencez par créer un Fork de ce repo et travaillez sur votre fork.**
@@ -123,15 +125,27 @@ _Lors de la définition d'une zone, spécifier l'adresse du sous-réseau IP avec
 
 **LIVRABLE : Remplir le tableau**
 
-| Adresse IP source | Adresse IP destination | Type | Port src | Port dst | Action |
-| :---:             | :---:                  | :---:| :------: | :------: | :----: |
-|                   |                        |      |          |          |        |
-|                   |                        |      |          |          |        |
-|                   |                        |      |          |          |        |
-|                   |                        |      |          |          |        |
-|                   |                        |      |          |          |        |
-|                   |                        |      |          |          |        |
-|                   |                        |      |          |          |        |
+|     Source    | Port    | Destination   |   Port  | Protocole | Flag | Action | Commentaire                   |
+|:-------------:|:-------:|:-------------:|:-------:|:---------:|:----:|:------:|:-----------------------------:|
+| *             | *       | *             | *       | *         |      | block  | interdiction par défaut       |
+| LAN           | *       | WAN           | 53      | TCP/UDP   |      | allow  | nos requêtes DNS vers le WAN  |
+| WAN           | 53      | LAN           | *       | TCP/UDP   | ACK  | allow  | les réponses DNS              |
+| LAN           | *       | WAN           | *       | ICMP      |      | allow  | echo request                  |
+| WAN           | *       | LAN           | *       | ICMP      | ACK  | allow  | echo reply                    |
+| LAN           | *       | DMZ           | *       | ICMP      |      | allow  |  echo request                 |
+| DMZ           | *       | LAN           | *       | ICMP      | ACK  | allow  | echo reply                    |
+| DMZ           | *       | LAN           | *       | ICMP      |      | allow  |  echo request                 |
+| LAN           | *       | DMZ           | *       | ICMP      | ACK  | allow  | echo reply                    |
+| LAN           | *       | WAN           | 80/8080 | HTTP      |      | allow  |  access web                   |
+| WAN           | 80/8080 | LAN           | *       | HTTP      | ACK  | allow  | web response                  |
+| LAN           | *       | WAN           | 443     | HTTPS     |      | allow  | access secure web             |
+| WAN           | 443     | LAN           | *       | HTTPS     | ACK  | allow  | secure web response           |
+| *             | *       | 192.168.200.3 | 80      | HTTP      |      | allow  | access internal web service   |
+| 192.168.200.3 | 80      | *             | *       | HTTP      | ACK  | allow  | response internal web service |
+| LAN           | *       | DMZ           | 22      | SSH       |      | allow  | remote access                 |
+| DMZ           | 22      | LAN           | *       | SSH       | ACK  | allow  | response remote access        |
+| 192.168.100.3 | *       | 192.168.100.2 | 22      | SHH       |      | allow  | firewall management           |
+| 192.168.100.2 | 22      | 192.168.100.3 | *       | SSH       | ACK  | allow  | firewall response             |
 
 ---
 
@@ -227,7 +241,7 @@ ping 192.168.200.3
 ---
 
 **LIVRABLE : capture d'écran de votre tentative de ping.**  
-
+![Failed Ping](./figures/pingFromLANClientFail.png)
 ---
 
 En effet, la communication entre les clients dans le LAN et les serveurs dans la DMZ doit passer à travers le Firewall. Il faut donc définir le Firewall comme passerelle par défaut pour le client dans le LAN et le serveur dans la DMZ.
@@ -259,7 +273,7 @@ ping 192.168.100.3
 ---
 
 **LIVRABLE : capture d'écran de votre nouvelle tentative de ping.**
-
+![Failed Ping](./figures/pingFromDMZServerSuccess.png)
 ---
 
 La communication est maintenant possible entre les deux machines. Pourtant, si vous essayez de communiquer depuis le client ou le serveur vers l'Internet, ça ne devrait pas encore fonctionner sans une manipulation supplémentaire au niveau du firewall. Vous pouvez le vérifier avec un ping depuis le client ou le serveur vers une adresse Internet. 
@@ -273,7 +287,7 @@ ping 8.8.8.8
 ---
 
 **LIVRABLE : capture d'écran de votre ping vers l'Internet.**
-
+![Failed Ping](./figures/ping8888FromDMZServerFail.png)
 ---
 
 ### Configuration réseau du firewall
@@ -369,6 +383,15 @@ Commandes iptables :
 
 ```bash
 LIVRABLE : Commandes iptables
+
+iptables -A FORWARD -p icmp --icmp-type 8 -s 192.168.100.0/24 -o eth0 -j ACCEPT
+iptables -A FORWARD -p icmp --icmp-type 0 -i eth0 -d 192.168.100.0/24 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+iptables -A FORWARD -p icmp --icmp-type 8 -s 192.168.100.0/24 -d 192.168.200.0/24 -j ACCEPT
+iptables -A FORWARD -p icmp --icmp-type 0 -s 192.168.200.0/24 -d 192.168.100.0/24 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+iptables -A FORWARD -p icmp --icmp-type 8 -s 192.168.200.0/24 -d 192.168.100.0/24 -j ACCEPT
+iptables -A FORWARD -p icmp --icmp-type 0 -s 192.168.100.0/24 -d 192.168.200.0/24 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 ```
 ---
 
@@ -386,7 +409,7 @@ Faire une capture du ping.
 
 ---
 **LIVRABLE : capture d'écran de votre ping vers l'Internet.**
-
+![Failed Ping](./figures/pingToWAN1.png)
 ---
 
 <ol type="a" start="3">
@@ -397,18 +420,18 @@ Faire une capture du ping.
 
 | De Client\_in\_LAN à | OK/KO | Commentaires et explications |
 | :---                 | :---: | :---                         |
-| Interface DMZ du FW  |       |                              |
-| Interface LAN du FW  |       |                              |
-| Client LAN           |       |                              |
-| Serveur WAN          |       |                              |
+| Interface DMZ du FW  |   KO    |     Pas de règle pour cette interface                         |
+| Interface LAN du FW  |     KO  |    Pas de règle pour cette interface                          |
+| Client LAN           |   OK    |     Ping loopback                         |
+| Serveur WAN          |     OK  |  On a configuré ICMP entre LAN et WAN                            |
 
 
 | De Server\_in\_DMZ à | OK/KO | Commentaires et explications |
 | :---                 | :---: | :---                         |
-| Interface DMZ du FW  |       |                              |
-| Interface LAN du FW  |       |                              |
-| Serveur DMZ          |       |                              |
-| Serveur WAN          |       |                              |
+| Interface DMZ du FW  |    KO   |     Pas de règle pour cette interface                         |
+| Interface LAN du FW  |   KO    |     Pas de règle pour cette interface                         |
+| Serveur DMZ          |   OK    |      Ping loopback                        |
+| Serveur WAN          |    KO   |       On n'a pas configuré ICMP entre DMZ et WAN                       |
 
 
 ## Règles pour le protocole DNS
@@ -428,6 +451,7 @@ ping www.google.com
 
 **LIVRABLE : capture d'écran de votre ping.**
 
+![Can't resolve Google](./figures/cantResolveGoogle.png)
 ---
 
 * Créer et appliquer la règle adéquate pour que la **condition 1 du cahier des charges** soit respectée.
@@ -438,6 +462,12 @@ Commandes iptables :
 
 ```bash
 LIVRABLE : Commandes iptables
+
+iptables -A FORWARD -p tcp -s 192.168.100.0/24/24 -o eth0 --dport 53 -j ACCEPT
+iptables -A FORWARD -p tcp -i eth0 -d 192.168.100.0/24 --sport 53 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+iptables -A FORWARD -p udp -s 192.168.100.0/24 -o eth0 --dport 53 -j ACCEPT
+iptables -A FORWARD -p udp -i eth0 -d 192.168.100.0/24 --sport 53 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 ```
 
 ---
@@ -451,6 +481,7 @@ LIVRABLE : Commandes iptables
 
 **LIVRABLE : capture d'écran de votre ping.**
 
+![Can resolve Google](./figures/canResolveGoogle.png)
 ---
 
 <ol type="a" start="6">
@@ -463,6 +494,7 @@ LIVRABLE : Commandes iptables
 
 **LIVRABLE : Votre réponse ici...**
 
+Etant donné que le client avait besoin de l'aide d'un serveur DNS pour résoudre le nom qu'on lui donnait, il ne recevait aucune réponse à son ping, ce qui changeait lorsqu'il avait accès à un DNS.
 ---
 
 
@@ -482,6 +514,15 @@ Commandes iptables :
 
 ```bash
 LIVRABLE : Commandes iptables
+
+iptables -A FORWARD -p tcp -s 192.168.100.0/24 -o eth0 --dport 80 -j ACCEPT
+iptables -A FORWARD -p tcp -i eth0 -d 192.168.100.0/24 --sport 80 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+iptables -A FORWARD -p tcp -s 192.168.100.0/24 -o eth0 --dport 8080 -j ACCEPT
+iptables -A FORWARD -p tcp -i eth0 -d 192.168.100.0/24 --sport 8080 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+iptables -A FORWARD -p tcp -s 192.168.100.0/24 -o eth0 --dport 443 -j ACCEPT
+iptables -A FORWARD -p tcp -i eth0 -d 192.168.100.0/24 --sport 443 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 ```
 
 ---
@@ -494,6 +535,12 @@ Commandes iptables :
 
 ```bash
 LIVRABLE : Commandes iptables
+
+iptables -A FORWARD -p tcp -d 192.168.200.3 --dport 80 -j ACCEPT
+iptables -A FORWARD -p tcp -s 192.168.200.3 --sport 80 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+iptables -A FORWARD -p tcp -s 192.168.100.3 -d 192.168.200.3 --dport 22 -j ACCEPT
+iptables -A FORWARD -p tcp -s 192.168.200.3 -d 192.168.100.3 --sport 22 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 ```
 ---
 
@@ -506,6 +553,7 @@ LIVRABLE : Commandes iptables
 
 **LIVRABLE : capture d'écran.**
 
+![Working wget from LAN to DMZ](./figures/wgetDMZFromLAN.png)
 ---
 
 
@@ -522,6 +570,9 @@ Commandes iptables :
 
 ```bash
 LIVRABLE : Commandes iptables
+
+iptables -A INPUT -p tcp -s 192.168.100.3 -d 192.168.100.2 --dport 22 -j ACCEPT
+iptables -A OUTPUT -p tcp -s 192.168.100.2 -d 192.168.100.3 --sport 22 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 ```
 
 ---
@@ -536,6 +587,7 @@ ssh root@192.168.200.3 (password : celui que vous avez configuré)
 
 **LIVRABLE : capture d'écran de votre connexion ssh.**
 
+![connexion SSH réussie sur DMZ](./figures/sshConnection.png)
 ---
 
 <ol type="a" start="9">
@@ -548,6 +600,7 @@ ssh root@192.168.200.3 (password : celui que vous avez configuré)
 
 **LIVRABLE : Votre réponse ici...**
 
+Le protocole ssh permet de se connecter à distance. Par exemple, un administrateur peut en cas de problème(s) ou autre(s) raison(s) accéder au serveur pour résoudre le(s) problème(s) sans être présent physiquement. SSH est particulièrement intéressant puisqu'il est plus sécurisé que d'autres protocoles comme par exemple telnet, où les données ne sont pas chiffrées.
 ---
 
 <ol type="a" start="10">
@@ -561,6 +614,7 @@ ssh root@192.168.200.3 (password : celui que vous avez configuré)
 
 **LIVRABLE : Votre réponse ici...**
 
+Il faut restreindre au maximum les addresses ayant accès à ce port, puisqu'il permet un accès à distance ou à ses services. C'est pour cela que dans cet exercice on ne peut accéder au serveur que depuis une machine dans le LAN.
 ---
 
 ## Règles finales iptables
@@ -576,4 +630,5 @@ A présent, vous devriez avoir le matériel nécessaire afin de reproduire la ta
 
 **LIVRABLE : capture d'écran avec toutes vos règles.**
 
+![Ensemble des règles appliquées](./figures/iptablesL.png)
 ---

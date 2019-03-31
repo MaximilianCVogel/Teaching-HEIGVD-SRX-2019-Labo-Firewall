@@ -1,0 +1,42 @@
+// Default : DROP everything
+iptables -P INPUT DROP
+iptables -P OUTPUT DROP
+iptables -P FORWARD DROP
+
+// DNS requests from LAN to WAN
+iptables -A FORWARD -p tcp -s 192.168.100.0/24/24 -o eth0 --dport 53 -j ACCEPT
+iptables -A FORWARD -p tcp -i eth0 -d 192.168.100.0/24 --sport 53 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+iptables -A FORWARD -p udp -s 192.168.100.0/24 -o eth0 --dport 53 -j ACCEPT
+iptables -A FORWARD -p udp -i eth0 -d 192.168.100.0/24 --sport 53 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+// Pings 
+iptables -A FORWARD -p icmp --icmp-type 8 -s 192.168.100.0/24 -o eth0 -j ACCEPT
+iptables -A FORWARD -p icmp --icmp-type 0 -i eth0 -d 192.168.100.0/24 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+iptables -A FORWARD -p icmp --icmp-type 8 -s 192.168.100.0/24 -d 192.168.200.0/24 -j ACCEPT
+iptables -A FORWARD -p icmp --icmp-type 0 -s 192.168.200.0/24 -d 192.168.100.0/24 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+iptables -A FORWARD -p icmp --icmp-type 8 -s 192.168.200.0/24 -d 192.168.100.0/24 -j ACCEPT
+iptables -A FORWARD -p icmp --icmp-type 0 -s 192.168.100.0/24 -d 192.168.200.0/24 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+// HTTP, HTTPS from LAN to WAN
+iptables -A FORWARD -p tcp -s 192.168.100.0/24 -o eth0 --dport 80 -j ACCEPT
+iptables -A FORWARD -p tcp -i eth0 -d 192.168.100.0/24 --sport 80 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+iptables -A FORWARD -p tcp -s 192.168.100.0/24 -o eth0 --dport 8080 -j ACCEPT
+iptables -A FORWARD -p tcp -i eth0 -d 192.168.100.0/24 --sport 8080 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+iptables -A FORWARD -p tcp -s 192.168.100.2 -o eth0 --dport 443 -j ACCEPT
+iptables -A FORWARD -p tcp -i eth0 -d 192.168.100.2 --sport 443 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+// DMZ webserver accessible through port 80 from anywhere, ssh connection accessible from LAN client
+iptables -A FORWARD -p tcp -d 192.168.200.3 --dport 80 -j ACCEPT
+iptables -A FORWARD -p tcp -s 192.168.200.3 --sport 80 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+iptables -A FORWARD -p tcp -s 192.168.100.3 -d 192.168.200.3 --dport 22 -j ACCEPT
+iptables -A FORWARD -p tcp -s 192.168.200.3 -d 192.168.100.3 --sport 22 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+// Firewall ssh connection accessible from LAN client
+iptables -A INPUT -p tcp -s 192.168.100.3 -d 192.168.100.2 --dport 22 -j ACCEPT
+iptables -A OUTPUT -p tcp -s 192.168.100.2 -d 192.168.100.3 --sport 22 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
